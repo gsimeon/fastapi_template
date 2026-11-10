@@ -162,6 +162,24 @@ def test_create_user_existing_username(
     assert "_id" not in created_user
 
 
+def test_create_user_email_taken_between_check_and_insert(
+    client: TestClient, superuser_token_headers: dict[str, str]
+) -> None:
+    # Two requests with the same email can both pass the check. The unique
+    # index stops the second insert, which must still answer 400.
+    data = {"email": settings.FIRST_SUPERUSER, "password": random_lower_string()}
+    with patch("app.crud.get_user_by_email", return_value=None):
+        r = client.post(
+            f"{settings.API_V1_STR}/users/",
+            headers=superuser_token_headers,
+            json=data,
+        )
+    assert r.status_code == 400
+    assert (
+        r.json()["detail"] == "The user with this email already exists in the system."
+    )
+
+
 def test_create_user_by_normal_user(
     client: TestClient, normal_user_token_headers: dict[str, str]
 ) -> None:
@@ -351,6 +369,22 @@ def test_register_user_already_exists_error(client: TestClient) -> None:
         f"{settings.API_V1_STR}/users/signup",
         json=data,
     )
+    assert r.status_code == 400
+    assert r.json()["detail"] == "The user with this email already exists in the system"
+
+
+def test_register_user_email_taken_between_check_and_insert(
+    client: TestClient,
+) -> None:
+    # Two signups with the same email can both pass the check. The unique
+    # index stops the second insert, which must still answer 400.
+    data = {
+        "email": settings.FIRST_SUPERUSER,
+        "password": random_lower_string(),
+        "full_name": random_lower_string(),
+    }
+    with patch("app.crud.get_user_by_email", return_value=None):
+        r = client.post(f"{settings.API_V1_STR}/users/signup", json=data)
     assert r.status_code == 400
     assert r.json()["detail"] == "The user with this email already exists in the system"
 
